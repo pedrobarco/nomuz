@@ -11,6 +11,7 @@ import (
 	"github.com/toqueteos/webbrowser"
 	"github.com/zmb3/spotify/v2"
 	spotifyauth "github.com/zmb3/spotify/v2/auth"
+	"golang.org/x/oauth2"
 )
 
 func NewSpotifyConnector(clientID, clientSecret string) (*spotifyConnector, error) {
@@ -25,22 +26,27 @@ func NewSpotifyConnector(clientID, clientSecret string) (*spotifyConnector, erro
 		),
 	)
 
-	ch := make(chan *spotify.Client)
-	server := NewSpotifyAuthServer(auth, ch)
+	token, err := GetSpotifyAuthToken()
+	if err != nil || IsInvalidSpotifyAuthToken(token) {
+		ch := make(chan *oauth2.Token)
+		server := NewSpotifyAuthServer(auth, ch)
 
-	go func() {
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("failed to start server: %v", err)
-		}
-	}()
-	defer func() {
-		if err := server.Close(); err != nil {
-			log.Fatalf("failed to close server: %v", err)
-		}
-	}()
+		go func() {
+			if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Fatalf("failed to start server: %v", err)
+			}
+		}()
+		defer func() {
+			if err := server.Close(); err != nil {
+				log.Fatalf("failed to close server: %v", err)
+			}
+		}()
 
-	webbrowser.Open(auth.AuthURL(spotifyAuthState))
-	client := <-ch
+		webbrowser.Open(auth.AuthURL(spotifyAuthState))
+		token = <-ch
+	}
+
+	client := spotify.New(auth.Client(ctx, token))
 
 	user, err := client.CurrentUser(ctx)
 	if err != nil {
