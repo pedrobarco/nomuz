@@ -2,30 +2,45 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
+	"net/http"
 
 	"github.com/pedrobarco/nomuz/internal/domain"
+	"github.com/toqueteos/webbrowser"
 	"github.com/zmb3/spotify/v2"
 	spotifyauth "github.com/zmb3/spotify/v2/auth"
-	"golang.org/x/oauth2/clientcredentials"
 )
 
 func NewSpotifyConnector(clientID, clientSecret string) (*spotifyConnector, error) {
 	ctx := context.Background()
 
-	cfg := &clientcredentials.Config{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		TokenURL:     "https://accounts.spotify.com/api/token",
-	}
+	auth := spotifyauth.New(
+		spotifyauth.WithClientID(clientID),
+		spotifyauth.WithClientSecret(clientSecret),
+		spotifyauth.WithRedirectURL(spotifyAuthRedirectURI),
+		spotifyauth.WithScopes(
+			spotifyauth.ScopeUserReadPrivate,
+		),
+	)
 
-	token, err := cfg.Token(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get token: %w", err)
-	}
+	ch := make(chan *spotify.Client)
+	server := NewSpotifyAuthServer(auth, ch)
 
-	httpClient := spotifyauth.New().Client(ctx, token)
-	client := spotify.New(httpClient)
+	go func() {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("failed to start server: %v", err)
+		}
+	}()
+	defer func() {
+		if err := server.Close(); err != nil {
+			log.Fatalf("failed to close server: %v", err)
+		}
+	}()
+
+	webbrowser.Open(auth.AuthURL(spotifyAuthState))
+	client := <-ch
 
 	user, err := client.CurrentUser(ctx)
 	if err != nil {
