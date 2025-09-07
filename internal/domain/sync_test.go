@@ -134,3 +134,82 @@ func TestPlanSync(t *testing.T) {
 		assert.Len(cl.TracksByPlaylist[ref1].Missing, 0)
 	})
 }
+
+func TestSync(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := context.Background()
+
+	tracks := []domain.Track{
+		{
+			ID:     "t1",
+			Title:  "Track 1",
+			Artist: "Artist A",
+			Album:  "Album X",
+		},
+		{
+			ID:     "t2",
+			Title:  "Track 2",
+			Artist: "Artist B",
+			Album:  "Album Y",
+		},
+		{
+			ID:     "t3",
+			Title:  "Track 3",
+			Artist: "Artist C",
+			Album:  "Album Z",
+		},
+	}
+
+	src := &mockConnector{
+		Playlists: []*domain.Playlist{
+			{
+				ID:   "pl1",
+				Name: "Playlist 1",
+				Tracks: append(tracks, domain.Track{
+					ID:     "t4",
+					Title:  "Rare Track",
+					Artist: "Unknown Artist",
+					Album:  "Unknown Album",
+				}),
+			},
+			{
+				ID:     "pl2",
+				Name:   "Playlist 2",
+				Tracks: tracks,
+			},
+		},
+	}
+
+	dst := &mockConnector{
+		Tracks: tracks,
+		Playlists: []*domain.Playlist{
+			{
+				ID:   "pl1",
+				Name: "Playlist 1",
+				Tracks: []domain.Track{
+					{
+						ID:     "t10",
+						Title:  "Track 10",
+						Artist: "Artist AA",
+						Album:  "Album XX",
+					},
+				},
+			},
+		},
+	}
+
+	cl, err := domain.PlanSync(ctx, src, dst)
+	assert.NoError(err)
+
+	err = domain.Sync(ctx, src, dst, *cl)
+	assert.NoError(err)
+
+	p1, err := dst.GetPlaylistByName(ctx, "Playlist 1")
+	assert.NoError(err)
+	assert.Len(p1.Tracks, 3)
+
+	p2, err := dst.GetPlaylistByName(ctx, "Playlist 2")
+	assert.NoError(err)
+	assert.Len(p2.Tracks, 3)
+}

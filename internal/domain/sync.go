@@ -12,6 +12,10 @@ type playlistTracksChangelog struct {
 	Missing []Track
 }
 
+func (cl *playlistTracksChangelog) HasChanges() bool {
+	return len(cl.Added) > 0 || len(cl.Removed) > 0 || len(cl.Missing) > 0
+}
+
 type playlistChangelog struct {
 	Added []PlaylistRef
 }
@@ -38,8 +42,6 @@ func PlanSync(ctx context.Context, from, to Connector) (*changelog, error) {
 	}
 
 	for _, src := range pls {
-		slog.Info("syncing playlist", "id", src.ID, "name", src.Name)
-
 		dst, err := to.GetPlaylistByName(ctx, src.Name)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get playlist %s from destination: %w", src.Name, err)
@@ -61,9 +63,13 @@ func PlanSync(ctx context.Context, from, to Connector) (*changelog, error) {
 			return nil, fmt.Errorf("failed to sync playlist %s: %w", src.Name, err)
 		}
 
+		if !cl.HasChanges() {
+			continue
+		}
+
 		ref := PlaylistRef{
-			ID:   src.ID,
-			Name: src.Name,
+			ID:   dst.ID,
+			Name: dst.Name,
 		}
 		changelog.TracksByPlaylist[ref] = *cl
 	}
@@ -78,10 +84,16 @@ func Sync(ctx context.Context, from, to Connector, cl changelog) error {
 		if err != nil {
 			return fmt.Errorf("failed to create playlist %s: %w", ref.Name, err)
 		}
+
 		createdPl[ref.Name] = PlaylistRef{
 			ID:   pl.ID,
 			Name: pl.Name,
 		}
+
+		slog.Info("created playlist",
+			"playlist_id", pl.ID,
+			"playlist_name", pl.Name,
+		)
 	}
 
 	for ref, tracks := range cl.TracksByPlaylist {
@@ -93,12 +105,24 @@ func Sync(ctx context.Context, from, to Connector, cl changelog) error {
 			if err := to.AddTracksToPlaylist(ctx, ref.ID, tracks.Added); err != nil {
 				return fmt.Errorf("failed to add tracks to playlist %s: %w", ref.Name, err)
 			}
+
+			slog.Info("added tracks to playlist",
+				"playlist_id", ref.ID,
+				"playlist_name", ref.Name,
+				"added_count", len(tracks.Added),
+			)
 		}
 
 		if len(tracks.Removed) > 0 {
 			if err := to.DeleteTracksFromPlaylist(ctx, ref.ID, tracks.Removed); err != nil {
 				return fmt.Errorf("failed to remove tracks from playlist %s: %w", ref.Name, err)
 			}
+
+			slog.Info("removed tracks from playlist",
+				"playlist_id", ref.ID,
+				"playlist_name", ref.Name,
+				"removed_count", len(tracks.Removed),
+			)
 		}
 	}
 
@@ -128,7 +152,6 @@ func syncPlaylist(ctx context.Context, src, dst Playlist, to Connector) (*playli
 
 		if len(tracks) == 0 {
 			cl.Missing = append(cl.Missing, tr)
-			slog.Info("track not found in destination, skipping", "isrc", tr.ID)
 			continue
 		}
 

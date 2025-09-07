@@ -16,7 +16,7 @@ var _ domain.Connector = (*mockConnector)(nil)
 
 func (m *mockConnector) CreatePlaylist(ctx context.Context, name string) (*domain.Playlist, error) {
 	pl := &domain.Playlist{
-		ID:     fmt.Sprintf("pl%d", len(m.Playlists)),
+		ID:     fmt.Sprintf("pl%d", len(m.Playlists)+1),
 		Name:   name,
 		Tracks: []domain.Track{},
 	}
