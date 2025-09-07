@@ -1,14 +1,17 @@
 package domain_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/pedrobarco/nomuz/internal/domain"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSync(t *testing.T) {
+func TestPlanSync(t *testing.T) {
 	assert := assert.New(t)
+
+	ctx := context.Background()
 
 	tracks := []domain.Track{
 		{
@@ -35,9 +38,10 @@ func TestSync(t *testing.T) {
 		src := &mockConnector{}
 		dst := &mockConnector{}
 
-		cl, err := domain.PlanSync(src, dst)
+		cl, err := domain.PlanSync(ctx, src, dst)
 		assert.NoError(err)
-		assert.Len(cl, 0)
+		assert.Len(cl.Playlists.Added, 0)
+		assert.Len(cl.TracksByPlaylist, 0)
 	})
 
 	t.Run("no changes to sync", func(t *testing.T) {
@@ -62,10 +66,10 @@ func TestSync(t *testing.T) {
 			},
 		}
 
-		cl, err := domain.PlanSync(src, dst)
+		cl, err := domain.PlanSync(ctx, src, dst)
 		assert.NoError(err)
-		assert.Len(cl, 1)
-		assert.False(cl[0].HasChanges())
+		assert.Len(cl.Playlists.Added, 0)
+		assert.Len(cl.TracksByPlaylist, 0)
 	})
 
 	t.Run("full sync", func(t *testing.T) {
@@ -107,16 +111,26 @@ func TestSync(t *testing.T) {
 			},
 		}
 
-		cl, err := domain.PlanSync(src, dst)
+		ref0 := domain.PlaylistRef{
+			ID:   src.Playlists[0].ID,
+			Name: src.Playlists[0].Name,
+		}
+
+		ref1 := domain.PlaylistRef{
+			ID:   src.Playlists[1].ID,
+			Name: src.Playlists[1].Name,
+		}
+
+		cl, err := domain.PlanSync(ctx, src, dst)
 		assert.NoError(err)
-		assert.Len(cl, 2)
-		assert.True(cl[0].HasChanges())
-		assert.False(cl[0].Added)
-		assert.Len(cl[0].Tracks.Added, 3)
-		assert.Len(cl[0].Tracks.Removed, 1)
-		assert.Len(cl[0].Tracks.Missing, 1)
-		assert.True(cl[1].HasChanges())
-		assert.True(cl[1].Added)
-		assert.Len(cl[1].Tracks.Added, 3)
+		assert.Len(cl.Playlists.Added, 1)
+		assert.Equal("pl2", cl.Playlists.Added[0].ID)
+		assert.Equal("Playlist 2", cl.Playlists.Added[0].Name)
+		assert.Len(cl.TracksByPlaylist[ref0].Added, 3)
+		assert.Len(cl.TracksByPlaylist[ref0].Removed, 1)
+		assert.Len(cl.TracksByPlaylist[ref0].Missing, 1)
+		assert.Len(cl.TracksByPlaylist[ref1].Added, 3)
+		assert.Len(cl.TracksByPlaylist[ref1].Removed, 0)
+		assert.Len(cl.TracksByPlaylist[ref1].Missing, 0)
 	})
 }
