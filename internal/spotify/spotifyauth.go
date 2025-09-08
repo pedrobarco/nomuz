@@ -1,4 +1,4 @@
-package connector
+package spotify
 
 import (
 	"fmt"
@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	spotifyAuthRedirectURI = "http://127.0.0.1:8080/callback"
-	spotifyAuthState       = "state-string"
-	successHTML            = `
+	authRedirectURI = "http://127.0.0.1:8080/callback"
+	authState       = "state-string"
+	successHTML     = `
 	<html>
 	<body>
 		<h2>Authentication Successful!</h2>
@@ -26,22 +26,22 @@ const (
 	`
 )
 
-func NewSpotifyAuthServer(auth *spotifyauth.Authenticator, ch chan<- *oauth2.Token) *http.Server {
+func NewAuthServer(auth *spotifyauth.Authenticator, ch chan<- *oauth2.Token) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-		token, err := auth.Token(r.Context(), spotifyAuthState, r)
+		token, err := auth.Token(r.Context(), authState, r)
 		if err != nil {
 			http.Error(w, "Couldn't get token", http.StatusForbidden)
 			log.Fatalf("Couldn't get token: %v", err)
 		}
 
-		if st := r.FormValue("state"); st != spotifyAuthState {
+		if st := r.FormValue("state"); st != authState {
 			http.NotFound(w, r)
-			log.Fatalf("State mismatch: %s != %s\n", st, spotifyAuthState)
+			log.Fatalf("State mismatch: %s != %s\n", st, authState)
 		}
 
 		defer func() {
-			if err := SaveSpotifyAuthToken(token); err != nil {
+			if err := SaveAuthToken(token); err != nil {
 				log.Printf("Failed to save spotify auth token: %v", err)
 			}
 		}()
@@ -58,7 +58,7 @@ func NewSpotifyAuthServer(auth *spotifyauth.Authenticator, ch chan<- *oauth2.Tok
 	}
 }
 
-func getSpotifyAuthConfigPath() (string, error) {
+func getAuthConfigPath() (string, error) {
 	cfg, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get user home dir: %v", err)
@@ -66,12 +66,12 @@ func getSpotifyAuthConfigPath() (string, error) {
 	return path.Join(cfg, "nomuz", "spotify_auth.yaml"), nil
 }
 
-type spotifyAuthConfig struct {
+type authConfig struct {
 	Token *oauth2.Token `yaml:"token"`
 }
 
-func SaveSpotifyAuthToken(token *oauth2.Token) error {
-	filePath, err := getSpotifyAuthConfigPath()
+func SaveAuthToken(token *oauth2.Token) error {
+	filePath, err := getAuthConfigPath()
 	if err != nil {
 		return fmt.Errorf("failed to get spotify auth config path: %v", err)
 	}
@@ -93,7 +93,7 @@ func SaveSpotifyAuthToken(token *oauth2.Token) error {
 	}
 	defer f.Close()
 
-	cfg := &spotifyAuthConfig{Token: token}
+	cfg := &authConfig{Token: token}
 	if err := yaml.NewEncoder(f).Encode(cfg); err != nil {
 		return fmt.Errorf("failed to write spotify auth config file: %v", err)
 	}
@@ -101,8 +101,8 @@ func SaveSpotifyAuthToken(token *oauth2.Token) error {
 	return nil
 }
 
-func GetSpotifyAuthToken() (*oauth2.Token, error) {
-	path, err := getSpotifyAuthConfigPath()
+func GetAuthToken() (*oauth2.Token, error) {
+	path, err := getAuthConfigPath()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get spotify auth config path: %v", err)
 	}
@@ -113,7 +113,7 @@ func GetSpotifyAuthToken() (*oauth2.Token, error) {
 	}
 	defer f.Close()
 
-	var cfg spotifyAuthConfig
+	var cfg authConfig
 	if err := yaml.NewDecoder(f).Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse spotify auth config file: %v", err)
 	}
@@ -121,6 +121,6 @@ func GetSpotifyAuthToken() (*oauth2.Token, error) {
 	return cfg.Token, nil
 }
 
-func IsInvalidSpotifyAuthToken(token *oauth2.Token) bool {
+func IsInvalidAuthToken(token *oauth2.Token) bool {
 	return token == nil || !token.Valid()
 }

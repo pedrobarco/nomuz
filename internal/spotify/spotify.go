@@ -1,4 +1,4 @@
-package connector
+package spotify
 
 import (
 	"context"
@@ -14,22 +14,22 @@ import (
 	"golang.org/x/oauth2"
 )
 
-func NewSpotifyConnector(clientID, clientSecret string) (*spotifyConnector, error) {
+func NewConnector(clientID, clientSecret string) (*connector, error) {
 	ctx := context.Background()
 
 	auth := spotifyauth.New(
 		spotifyauth.WithClientID(clientID),
 		spotifyauth.WithClientSecret(clientSecret),
-		spotifyauth.WithRedirectURL(spotifyAuthRedirectURI),
+		spotifyauth.WithRedirectURL(authRedirectURI),
 		spotifyauth.WithScopes(
 			spotifyauth.ScopeUserReadPrivate,
 		),
 	)
 
-	token, err := GetSpotifyAuthToken()
-	if err != nil || IsInvalidSpotifyAuthToken(token) {
+	token, err := GetAuthToken()
+	if err != nil || IsInvalidAuthToken(token) {
 		ch := make(chan *oauth2.Token)
-		server := NewSpotifyAuthServer(auth, ch)
+		server := NewAuthServer(auth, ch)
 
 		go func() {
 			if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -42,7 +42,7 @@ func NewSpotifyConnector(clientID, clientSecret string) (*spotifyConnector, erro
 			}
 		}()
 
-		webbrowser.Open(auth.AuthURL(spotifyAuthState))
+		webbrowser.Open(auth.AuthURL(authState))
 		token = <-ch
 	}
 
@@ -53,20 +53,20 @@ func NewSpotifyConnector(clientID, clientSecret string) (*spotifyConnector, erro
 		return nil, fmt.Errorf("failed to get current user: %w", err)
 	}
 
-	return &spotifyConnector{
+	return &connector{
 		client: client,
 		user:   user,
 	}, nil
 }
 
-type spotifyConnector struct {
+type connector struct {
 	client *spotify.Client
 	user   *spotify.PrivateUser
 }
 
-var _ domain.Connector = (*spotifyConnector)(nil)
+var _ domain.Connector = (*connector)(nil)
 
-func (s *spotifyConnector) CreatePlaylist(ctx context.Context, name string) (*domain.Playlist, error) {
+func (s *connector) CreatePlaylist(ctx context.Context, name string) (*domain.Playlist, error) {
 	pl, err := s.client.CreatePlaylistForUser(ctx, s.user.ID, name, "", false, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create playlist: %w", err)
@@ -78,7 +78,7 @@ func (s *spotifyConnector) CreatePlaylist(ctx context.Context, name string) (*do
 	}, nil
 }
 
-func (s *spotifyConnector) GetPlaylistByName(ctx context.Context, name string) (*domain.Playlist, error) {
+func (s *connector) GetPlaylistByName(ctx context.Context, name string) (*domain.Playlist, error) {
 	res, err := s.client.GetPlaylistsForUser(ctx, s.user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get playlists for user: %w", err)
@@ -108,7 +108,7 @@ func (s *spotifyConnector) GetPlaylistByName(ctx context.Context, name string) (
 	return p, nil
 }
 
-func (s *spotifyConnector) GetPlaylists(ctx context.Context) ([]*domain.Playlist, error) {
+func (s *connector) GetPlaylists(ctx context.Context) ([]*domain.Playlist, error) {
 	res, err := s.client.GetPlaylistsForUser(ctx, s.user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get playlists for user: %w", err)
@@ -127,7 +127,7 @@ func (s *spotifyConnector) GetPlaylists(ctx context.Context) ([]*domain.Playlist
 	return pls, nil
 }
 
-func (s *spotifyConnector) AddTracksToPlaylist(ctx context.Context, id string, tracks []domain.Track) error {
+func (s *connector) AddTracksToPlaylist(ctx context.Context, id string, tracks []domain.Track) error {
 	var spotifyTracks []spotify.ID
 	for _, t := range tracks {
 		spotifyTracks = append(spotifyTracks, spotify.ID(t.ID))
@@ -141,7 +141,7 @@ func (s *spotifyConnector) AddTracksToPlaylist(ctx context.Context, id string, t
 	return nil
 }
 
-func (s *spotifyConnector) DeleteTracksFromPlaylist(ctx context.Context, id string, tracks []domain.Track) error {
+func (s *connector) DeleteTracksFromPlaylist(ctx context.Context, id string, tracks []domain.Track) error {
 	var spotifyTracks []spotify.ID
 	for _, t := range tracks {
 		spotifyTracks = append(spotifyTracks, spotify.ID(t.ID))
@@ -155,7 +155,7 @@ func (s *spotifyConnector) DeleteTracksFromPlaylist(ctx context.Context, id stri
 	return nil
 }
 
-func (s *spotifyConnector) SearchTrack(ctx context.Context, filters domain.TrackFilters) ([]domain.Track, error) {
+func (s *connector) SearchTrack(ctx context.Context, filters domain.TrackFilters) ([]domain.Track, error) {
 	res, err := s.client.Search(ctx, filters.ID, spotify.SearchTypeTrack)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search track: %w", err)
@@ -173,7 +173,7 @@ func (s *spotifyConnector) SearchTrack(ctx context.Context, filters domain.Track
 	return tracks, nil
 }
 
-func (s *spotifyConnector) getTracksByPlaylistID(ctx context.Context, playlistID string) ([]domain.Track, error) {
+func (s *connector) getTracksByPlaylistID(ctx context.Context, playlistID string) ([]domain.Track, error) {
 	res, err := s.client.GetPlaylistItems(ctx, spotify.ID(playlistID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get playlist items: %w", err)
@@ -190,7 +190,7 @@ func (s *spotifyConnector) getTracksByPlaylistID(ctx context.Context, playlistID
 	return tracks, nil
 }
 
-func (s *spotifyConnector) toDomainTrack(t spotify.FullTrack) domain.Track {
+func (s *connector) toDomainTrack(t spotify.FullTrack) domain.Track {
 	return domain.Track{
 		ID:     t.ID.String(),
 		Title:  t.Name,

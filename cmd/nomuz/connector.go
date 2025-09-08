@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/pedrobarco/nomuz/internal/connector"
 	"github.com/pedrobarco/nomuz/internal/domain"
+	"github.com/pedrobarco/nomuz/internal/spotify"
 )
 
 type ConnectorName string
@@ -16,7 +16,7 @@ const (
 func NewConnector(cfg *config, name string) (domain.Connector, error) {
 	switch ConnectorName(name) {
 	case ConnectorSpotify:
-		return connector.NewSpotifyConnector(
+		return spotify.NewConnector(
 			cfg.Connectors.Spotify.ClientID,
 			cfg.Connectors.Spotify.ClientSecret,
 		)
