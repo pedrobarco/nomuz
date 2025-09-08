@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/pedrobarco/nomuz/internal/domain"
 	"github.com/urfave/cli/v3"
 )
@@ -34,29 +37,31 @@ var playlistsCmd = &cli.Command{
 			return fmt.Errorf("failed to create connector: %w", err)
 		}
 
-		var res []*domain.Playlist
+		res, err := connector.GetPlaylists(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get playlists: %w", err)
+		}
 
+		var pls []*domain.Playlist
 		name := cmd.String("name")
-		if name != "" {
-			playlist, err := connector.GetPlaylistByName(ctx, name)
-			if err != nil {
-				return fmt.Errorf("failed to get playlist by name: %w", err)
+		for _, p := range res {
+			if name == "" || p.Name == name {
+				pls = append(pls, p)
 			}
-			res = append(res, playlist)
-		} else {
-			playlists, err := connector.GetPlaylists(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to get playlists: %w", err)
-			}
-			res = playlists
 		}
 
-		for _, p := range res {
-			fmt.Printf("ID : %s\n", p.ID)
-			fmt.Printf("Name : %s\n", p.Name)
-			fmt.Printf("Number of tracks : %d\n", len(p.Tracks))
-			fmt.Println("-----")
+		t := table.New().
+			Border(lipgloss.NormalBorder()).
+			StyleFunc(func(row, col int) lipgloss.Style {
+				return cellStyle
+			})
+
+		t.Headers("ID", "Name", "# Tracks")
+		for _, p := range pls {
+			t.Row(p.ID, p.Name, strconv.Itoa(len(p.Tracks)))
 		}
+
+		fmt.Println(t.Render())
 
 		return nil
 	},

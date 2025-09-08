@@ -31,7 +31,7 @@ Now you can run it as:
 ### List playlists
 
 ```sh
-nomuz list --from spotify
+nomuz playlists --from spotify
 ```
 
 ### Transfer a playlist
