@@ -117,16 +117,10 @@ func (s *spotifyConnector) GetPlaylists(ctx context.Context) ([]*domain.Playlist
 	var pls []*domain.Playlist
 	for _, pl := range res.Playlists {
 		p := &domain.Playlist{
-			ID:   pl.ID.String(),
-			Name: pl.Name,
+			ID:     pl.ID.String(),
+			Name:   pl.Name,
+			Tracks: make([]domain.Track, int(pl.Tracks.Total)),
 		}
-
-		tracks, err := s.getTracksByPlaylistID(ctx, p.ID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get tracks for playlist %s: %w", p.Name, err)
-		}
-
-		p.Tracks = tracks
 		pls = append(pls, p)
 	}
 
