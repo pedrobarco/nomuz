@@ -14,11 +14,18 @@ type config struct {
 
 type connectorsConfig struct {
 	Spotify spotifyConfig `yaml:"spotify"`
+	Tidal   tidalConfig   `yaml:"tidal"`
 }
 
 type spotifyConfig struct {
 	ClientID     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
+}
+
+type tidalConfig struct {
+	ClientID     string `yaml:"client_id"`
+	ClientSecret string `yaml:"client_secret"`
+	CountryCode  string `yaml:"country_code"`
 }
 
 var defaultConfig = config{}
